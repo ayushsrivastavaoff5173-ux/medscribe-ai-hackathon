@@ -15,13 +15,14 @@ const loadingSpinner = document.getElementById('loadingSpinner');
 let isRecording = false;
 let recognition = null;
 let finalTranscript = "";
+let lastNotes = null;
 
 function setStatus(kind, message) {
     statusIndicator.className = "status-box " + kind;
     statusText.textContent = message;
 }
 
-// ---------- Live speech-to-text (browser Web Speech API) ----------
+// ---------- Live speech-to-text (Chrome/Edge only) ----------
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 function setupRecognition() {
@@ -42,10 +43,9 @@ function setupRecognition() {
     };
 
     recognition.onerror = (e) => {
-        if (e.error !== "no-speech") setStatus("idle", "Mic error: " + e.error);
+        if (e.error !== "no-speech") setStatus("idle", "Mic error: " + e.error + " (use Chrome/Edge)");
     };
 
-    // Chrome kabhi khud band kar deta hai; recording chal rahi ho to restart
     recognition.onend = () => {
         if (isRecording) recognition.start();
     };
@@ -71,12 +71,11 @@ recordBtn.addEventListener('click', () => {
         recordBtn.innerHTML = '<span class="icon">🎙️</span> Start Recording';
         recordBtn.classList.remove('recording');
         recognition.stop();
-        // thoda ruko taaki last result aa jaye
         setTimeout(() => generateNotes(finalTranscript.trim()), 600);
     }
 });
 
-// ---------- Sample consultation (demo fallback) ----------
+// ---------- Sample consultation ----------
 sampleBtn.addEventListener('click', () => {
     const sample =
 `Doctor: Good morning Mr. Sharma, what brings you in today?
@@ -112,6 +111,7 @@ async function generateNotes(conversation) {
         }
 
         const notes = await res.json();
+        lastNotes = notes;
         renderNotes(notes);
         exportPdfBtn.removeAttribute('disabled');
         setStatus("success", "Clinical EMR notes successfully generated!");
@@ -122,7 +122,7 @@ async function generateNotes(conversation) {
     }
 }
 
-// ---------- Render (textContent use kiya hai, AI output safe rehta hai) ----------
+// ---------- Render ----------
 function renderNotes(n) {
     complaintsOutput.textContent = n.chief_complaint;
 
@@ -155,7 +155,60 @@ function renderNotes(n) {
     });
 }
 
-// ---------- Export PDF (abhi mock) ----------
+// ---------- Export PDF (print dialog -> Save as PDF) ----------
+function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 exportPdfBtn.addEventListener('click', () => {
-    alert("Success! Compiling clinical notes into formal PDF prescription...");
+    if (!lastNotes) {
+        alert("Pehle notes generate karo.");
+        return;
+    }
+    const n = lastNotes;
+    const ok = (v) => v && v !== "Not specified" && v !== "Not mentioned";
+    const list = (arr) => arr.length ? arr.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>None mentioned</li>";
+
+    const meds = n.medications.length
+        ? n.medications.map((m) => {
+            const parts = [m.dose, m.frequency, m.duration].filter(ok);
+            return `<li><b>${esc(m.name)}</b> — ${parts.length ? esc(parts.join(", ")) : "dosage to be confirmed by doctor"}</li>`;
+        }).join("")
+        : "<li>No medications mentioned</li>";
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Prescription</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 32px; color: #111; }
+  h1 { margin: 0; color: #0284c7; }
+  .sub { color: #555; margin-bottom: 16px; }
+  h2 { font-size: 14px; text-transform: uppercase; color: #444; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px; }
+  ul { margin: 6px 0; } li { margin: 4px 0; }
+  .foot { margin-top: 40px; font-size: 12px; color: #777; border-top: 1px solid #ccc; padding-top: 8px; }
+</style></head><body>
+<h1>MedScribe AI</h1>
+<div class="sub">Clinical Notes &amp; Prescription &middot; ${new Date().toLocaleDateString()}</div>
+<h2>Chief Complaint</h2><p>${esc(n.chief_complaint)}</p>
+<h2>History of Present Illness</h2><p>${esc(n.history_of_present_illness)}</p>
+<h2>Symptoms</h2><ul>${list(n.symptoms)}</ul>
+<h2>Diagnosis</h2><p>${esc(n.diagnosis)}${n.icd10_code ? " (ICD-10: " + esc(n.icd10_code) + ")" : ""}</p>
+<h2>Medications</h2><ul>${meds}</ul>
+<h2>Allergies</h2><ul>${list(n.allergies)}</ul>
+<h2>Advice</h2><ul>${list(n.advice)}</ul>
+<h2>Follow-up</h2><p>${esc(n.follow_up)}</p>
+<div class="foot">AI-generated notes. To be reviewed and verified by the treating doctor. ICD-10 code is an AI suggestion.</div>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => iframe.remove(), 60000);
+    }, 300);
 });
