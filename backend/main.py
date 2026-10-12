@@ -1,5 +1,4 @@
 import os
-<<<<<<< HEAD
 import time
 from typing import List
 
@@ -16,17 +15,6 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 client = genai.Client(api_key=API_KEY) if API_KEY else None
-=======
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-import json
-
-load_dotenv()
->>>>>>> bec17c2 (Update FastAPI backend routes, configure Gemini 3.8 model, and fix frontend UI)
 
 app = FastAPI()
 
@@ -38,7 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-<<<<<<< HEAD
 
 class NotesRequest(BaseModel):
     conversation: str
@@ -76,19 +63,10 @@ Rules:
 - The conversation may be in English, Hindi or Hinglish; write the notes in English."""
 
 
-=======
-# Initialize Gemini Client (automatically reads GEMINI_API_KEY from .env)
-client = genai.Client()
-
-class ConsultationRequest(BaseModel):
-    conversation: str
-
->>>>>>> bec17c2 (Update FastAPI backend routes, configure Gemini 3.8 model, and fix frontend UI)
 @app.get("/")
 def root():
     return {"status": "MedScribe AI Backend is running!"}
 
-<<<<<<< HEAD
 
 @app.post("/generate-notes", response_model=MedicalNotes)
 def generate_notes(req: NotesRequest):
@@ -120,35 +98,3 @@ def generate_notes(req: NotesRequest):
             break
 
     raise HTTPException(status_code=503, detail=f"Gemini busy/error: {last_error}")
-=======
-@app.post("/generate-notes")
-def generate_notes(req: ConsultationRequest):
-    try:
-        prompt = f"""
-        You are an expert medical AI scribe. Analyze the following doctor-patient consultation transcript and extract structured EMR clinical notes.
-        You must return ONLY a valid JSON object with the following exact keys:
-        - "chief_complaint": A concise summary of the patient's main symptoms and history.
-        - "diagnosis": The medical diagnosis.
-        - "icd10_code": The corresponding ICD-10 code tag (e.g., J04.0).
-        - "medications": An array of objects, where each object has "name", "dose", "frequency", and "duration". If a value is unknown, use "Not specified".
-
-        Transcript:
-        {req.conversation}
-        """
-
-        model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-        
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            ),
-        )
-
-        notes = json.loads(response.text)
-        return notes
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
->>>>>>> bec17c2 (Update FastAPI backend routes, configure Gemini 3.8 model, and fix frontend UI)
