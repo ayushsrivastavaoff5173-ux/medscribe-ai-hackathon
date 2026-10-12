@@ -1,4 +1,4 @@
-const API_URL = "http://127.0.0.1:8001/generate-notes";
+const API_URL = "https://medscribe-ai-hackathon.onrender.com/generate-notes";
 const SPEECH_LANG = "en-IN"; // Hindi ke liye "hi-IN"
 
 const recordBtn = document.getElementById('recordBtn');
